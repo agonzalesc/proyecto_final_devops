@@ -18,7 +18,7 @@ jobs:
       - name: Configure Docker to trust HTTP registry
         run: |
           sudo mkdir -p /etc/docker
-          echo '{"insecure-registries":["54.208.126.39:8082"]}' | sudo tee /etc/docker/daemon.json
+          echo '{"insecure-registries":["18.207.189.45:8082"]}' | sudo tee /etc/docker/daemon.json
           sudo systemctl restart docker
 
       - name: Login to Nexus Docker Registry

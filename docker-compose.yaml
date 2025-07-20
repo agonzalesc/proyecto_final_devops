@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   store-api:
-    image: localhost:8082/store-api:${API_VERSION:-latest}
+    image: 18.207.189.45:8082/docker-repo/store-api:${API_VERSION:-latest}
     container_name: store-api
     ports:
       - "5000:5000"

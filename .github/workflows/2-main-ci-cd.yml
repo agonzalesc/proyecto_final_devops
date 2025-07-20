@@ -1,9 +1,9 @@
-name: 'CI/CD: Build, Publish and Deploy App'
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - develop
+      - main
 
 jobs:
   build-and-publish:
@@ -15,7 +15,8 @@ jobs:
 
       - name: Configure Docker for insecure registry
         run: |
-          echo '{ "insecure-registries":["18.207.189.45:8082"] }' | sudo tee /etc/docker/daemon.json
+          sudo mkdir -p /etc/docker
+          echo '{ "insecure-registries": ["18.207.189.45:8082"] }' | sudo tee /etc/docker/daemon.json
           sudo systemctl restart docker
 
       - name: Login to Nexus Docker Registry
@@ -25,41 +26,32 @@ jobs:
           username: ${{ secrets.NEXUS_USERNAME }}
           password: ${{ secrets.NEXUS_PASSWORD }}
 
-      - name: Build Docker image
-        run: |
-          docker build -t 18.207.189.45:8082/docker-repo/store-api:${{ github.sha }} .
-
-      - name: Push Docker image
-        run: |
-          docker push 18.207.189.45:8082/docker-repo/store-api:${{ github.sha }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: 18.207.189.45:8082/docker-repo/store-api:latest
 
   deploy:
     name: Deploy Full Stack to EC2
     runs-on: ubuntu-latest
     needs: build-and-publish
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Copy project files to EC2
-        uses: appleboy/scp-action@master
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.1
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yaml,prometheus.yml"
-          target: "~/app"
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Deploy services on EC2
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            export API_VERSION=${{ github.sha }}
-            cd ~/app
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
             docker login http://18.207.189.45:8082 -u ${{ secrets.NEXUS_USERNAME }} -p ${{ secrets.NEXUS_PASSWORD }}
+            cd app
+            docker-compose down
             docker-compose pull
-            docker-compose up -d --remove-orphans
+            docker-compose up -d
+          EOF
